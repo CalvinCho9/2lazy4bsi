@@ -1,6 +1,6 @@
 export type Workflow = 'Frederick' | 'Endoscopy';
 export const PHI_DENYLIST = ['name', 'mrn', 'medical record', 'date of birth', 'dob'];
-export const FREDERICK_VOLUME_MODE: 'manual' | 'source' = 'manual';
+export const FREDERICK_VOLUME_MODE: 'manual' | 'source' = 'source';
 export const SCHEMAS: Record<Workflow, readonly string[]> = {
  Frederick: ['Sample ID','Sequence','BSI ID','Subject ID','Date Drawn','Protocol','Material Type','Material Modifiers','Volume','Volume Unit','Volume Estimate','Current label','Label Status','Study ID','Tests','Thaws','Vial Status','Freezer','Rack','Box','Row','Col'],
  Endoscopy: ['BSI ID','Sample ID','Sequence','Subject ID','Date Drawn','Freezer','Rack','Box','Row','Col','Current Label','Date Received','Label Status','Material Modifiers','Material Type','Sample Modifiers','Study ID','Tests','Thaws','Vial Location ID','Vial Modifiers','Vial Status','Vial Type','Vial Warnings','Volume','Volume Estimate','Volume Unit','Protocol'],

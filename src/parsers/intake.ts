@@ -45,7 +45,11 @@ export function parseBytes(data: ArrayBuffer, workflow: Workflow, format: 'csv' 
     if (workflow === 'Frederick') {
      const headerRow = matrix.find(row => REQUIRED.Frederick.every(key => row.some(cell => !isPHI(cell) && ALIASES[key].includes(header(cell)))))!;
      const dateColumn = headerRow.findIndex(cell => ALIASES['Date Drawn'].includes(header(cell)));
+     const volumeColumn = headerRow.findIndex(cell => ALIASES.Volume.includes(header(cell)));
      for (const row of sanitized.rows) {
+      // Read the approved numeric cell value, not Excel's display formatting (e.g. 1,000.00).
+      const volumeCell = volumeColumn >= 0 ? sheet[XLSX.utils.encode_cell({r:row.line-1,c:volumeColumn})] : undefined;
+      if (volumeCell?.t === 'n' && Number.isFinite(volumeCell.v)) row.values.Volume = String(volumeCell.v);
       const cell = sheet[XLSX.utils.encode_cell({r:row.line-1,c:dateColumn})];
       if (cell?.t === 'n' && cell.z && XLSX.SSF.is_date(cell.z)) {
        const date = XLSX.SSF.parse_date_code(cell.v,{date1904:!!book.Workbook?.WBProps?.date1904});
