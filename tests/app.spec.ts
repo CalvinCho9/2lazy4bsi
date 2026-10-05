@@ -1,0 +1,34 @@
+import {test,expect} from '@playwright/test';
+import * as XLSX from 'xlsx';
+import {endoscopy} from '../src/tests/fixtures';
+test('Frederick upload, review, clipboard, download, reset and no network or storage',async({page,context})=>{
+ await context.grantPermissions(['clipboard-read','clipboard-write']);
+ await page.goto('/');
+ const requests:string[]=[];page.on('request',r=>requests.push(r.url()));
+ await page.getByRole('button',{name:/Frederick/}).click();
+ await page.getByLabel('Source spreadsheet').setInputFiles({name:'synthetic.csv',mimeType:'text/csv',buffer:Buffer.from('Material Type,Material Modifier,MRN,First Name\nPlasma,Frozen,SECRET,SECRET\nSlide,,SECRET,SECRET\nSerum,,SECRET,SECRET\nPlasma,,SECRET,SECRET')});
+ await expect(page.getByText('2 potentially identifying columns removed before processing.')).toBeVisible();
+ await page.getByLabel('Subject ID',{exact:true}).fill('TEST-001');await page.getByLabel('Date Drawn',{exact:true}).fill('2026-10-05');
+ await expect(page.getByRole('cell',{name:'Plasma',exact:true})).toHaveCount(2);
+ await expect(page.locator('body')).not.toContainText('SECRET');
+ await page.getByRole('button',{name:'Generate BSI CSV',exact:true}).click();
+ await page.getByRole('button',{name:'Copy CSV to Clipboard'}).click();
+ const csv=await page.getByLabel('Complete CSV text').inputValue();expect((await page.evaluate(()=>navigator.clipboard.readText())).replace(/\r\n/g,'\n')).toBe(csv);
+ const download=page.waitForEvent('download');await page.getByRole('button',{name:'Download CSV'}).click();expect((await download).suggestedFilename()).toMatch(/^FREDERICK_BSI_IMPORT_/);
+ expect(await page.evaluate(()=>({local:localStorage.length,session:sessionStorage.length,cookies:document.cookie}))).toEqual({local:0,session:0,cookies:''});
+ expect(requests).toEqual([]);
+ await page.getByRole('button',{name:'Reset / Clear file'}).click();await expect(page.getByLabel('Subject ID',{exact:true})).toHaveValue('');await expect(page.getByLabel('Complete CSV text')).toHaveCount(0);
+});
+test('Endoscopy XLSX and controlled anatomy resolution',async({page})=>{
+ await page.goto('/');await page.getByRole('button',{name:/Endoscopy/}).click();
+ const book=XLSX.utils.book_new();XLSX.utils.book_append_sheet(book,XLSX.utils.aoa_to_sheet([...endoscopy,['Unknown region',1,2,'Study Team','BG 10 Lab']]),'Test');
+ await page.getByLabel('Source spreadsheet').setInputFiles({name:'test.xlsx',mimeType:'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',buffer:XLSX.write(book,{type:'buffer',bookType:'xlsx'})});
+ await page.getByLabel('Subject ID',{exact:true}).fill('TEST-002');await page.getByLabel('Date Drawn',{exact:true}).fill('2026-10-05');
+ await expect(page.getByRole('button',{name:'Generate BSI CSV',exact:true})).toBeDisabled();
+ const selector=page.getByLabel(/Approved anatomy entities/);await selector.selectOption('ILEUM');await selector.selectOption('TERMINAL');
+ await page.getByRole('button',{name:/Apply anatomy for row/}).click();
+ await expect(page.getByRole('button',{name:'Generate BSI CSV',exact:true})).toBeEnabled();
+ await expect(page.getByText(/IMPORTANT: If you have a vial/)).toBeVisible();
+ await page.getByRole('button',{name:'Generate BSI CSV',exact:true}).click();expect(await page.getByLabel('Complete CSV text').inputValue()).toContain('ILEUM; TERMINAL');
+ await page.getByRole('button',{name:/Frederick/}).click();await expect(page.getByLabel('Subject ID',{exact:true})).toHaveValue('');
+});
