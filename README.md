@@ -1,6 +1,6 @@
 # BSI Data Preparation
 
-A static React + TypeScript + Vite utility for preparing Frederick shipping manifests and Endoscopy specimens for BSI. Supports CSV, XLSX and legacy XLS. No account, backend, database or API is used.
+A static React + TypeScript + Vite utility for preparing Frederick shipping manifests and Endoscopy specimens for BSI. Supports CSV, XLSX and legacy XLS, plus bordered-table PNG images for Endoscopy. No account, backend, database or API is used.
 
 ## Privacy architecture
 
@@ -8,7 +8,7 @@ Files are read using the browser File API and parsed with locally bundled SheetJ
 
 Headers are normalized for case, punctuation and whitespace. `src/rules/config.ts` contains the configurable `PHI_DENYLIST`: name, mrn, medical record, date of birth, dob (including compact spellings). Only the count of removed columns is shown. No raw rows or parser errors are logged. Errors contain safe fixed messages and source row numbers.
 
-Sanitized working data exists only in memory. Reset, file replacement, workflow switching and pagehide clear application state and invalidate pending reads. JavaScript garbage collection controls physical memory reclamation; secure memory erasure is not guaranteed. There is no localStorage, sessionStorage, IndexedDB, cookies, service worker, telemetry, remote scripts or data-bearing URL/history state. The production content security policy blocks connections (`connect-src 'none'`), forms, objects and external assets. GitHub serves static assets and sees ordinary website requests, never uploaded spreadsheets. All dependency assets are bundled locally.
+Sanitized working data exists only in memory. Reset, file replacement, workflow switching and pagehide clear application state and invalidate pending reads. JavaScript garbage collection controls physical memory reclamation; secure memory erasure is not guaranteed. There is no localStorage, sessionStorage, IndexedDB, cookies, service worker, telemetry, remote scripts or data-bearing URL/history state. The production content security policy blocks external connections, forms, objects and external assets. `connect-src 'self'` permits loading the bundled OCR assets from this site's origin. OCR requests are fixed static GETs; no request contains image pixels, extracted text, specimen values or filenames. GitHub serves static assets and sees ordinary website requests, never uploaded spreadsheets. All runtime dependency assets are bundled locally. PNG OCR uses a dedicated worker and downloads its engine/model from the same site; model IndexedDB caching is disabled.
 
 Header-based removal cannot detect identifiers incorrectly placed in retained specimen fields or user-entered Subject ID. This is not a certification of de-identification or regulatory compliance. Keep real PHI out of source control and tests. Clipboard and downloaded CSV files are explicitly user-created copies and are not erased by Reset. Browser extensions and operating-system clipboard/history facilities are outside this app's control.
 
@@ -59,6 +59,25 @@ Already controlled entities are accepted, deduplicated and combined with the reg
 
 Material Type is Biopsy; Volume is 0.500; Unit is ml (cc); Vial Type is 2ml Nunc Tube. Date Received uses the browser's local calendar date with exactly `00:00`, formatted MM/DD/YYYY HH:mm. Date Drawn is exported as MM/DD/YYYY. All other constants and blank fields match the centralized schema. The required cryovial/fragment warning is displayed before generation.
 
+## Endoscopy PNG workflow
+
+Upload a clear PNG of the complete bordered table, including its header row. The supported layout is the supplied example: Anatomic Location, No. Passes, Fragments, Container, Going where?, Protocol, with full-width anatomical section rows and optional gaps between tables. Column widths and row positions are detected from borders rather than hard-coded screenshot coordinates. Headers must match recognized aliases; extra PHI/unknown columns are not read below their headers.
+
+The browser decodes the image, detects borders and OCRs the header cells. It then reads only anatomy, Container and Going where? cells using Tesseract.js. This image-specific intake necessarily sees pixels and header text before identifying PHI columns. It does not OCR PHI-column values, footnotes, passes, fragments or protocol. No image or arbitrary raw OCR text is shown in the UI or retained in application state. Only controlled anatomy/routing labels enter the review; unknown or low-confidence OCR becomes **Needs review**. Column detection and OCR are not a guarantee of de-identification. Keep identifying text outside the specimen fields.
+
+1. Compare every detected row against the original PNG open locally. The app does not display the original image because it may contain identifiers.
+2. Correct region, location, Container and destination with the dropdowns. Add missed specimen rows or remove extra detected rows. Appended rows carry their own explicit region.
+3. Resolve every unknown Container/destination, and region/location for every Study Team + BG 10 Lab row. **Other** explicitly excludes a row; recognized Building 4 maps to Other. Review excluded rows as carefully as included rows so an OCR routing error does not omit a specimen.
+4. Click **I checked every image row — confirm extraction**, enter Subject ID/Date Drawn, inspect the final BSI table and generate CSV. Editing any extraction row invalidates confirmation and generated output.
+
+Each retained image row yields exactly one specimen row. The provided reference has 19 specimen rows and 9 qualifying BG 10 Lab rows. Its Duodenum Study Team row routes to Building 4 and is excluded under the existing rule. Initial OCR on the reference required anatomy correction (including Terminal Ileum); it is deliberately not treated as authoritative. The supplied image is not committed to the repository; automated fixtures are generated synthetic images.
+
+PNG limits: 20 MB; at least 300 × 100 pixels; neither dimension above 6,000; at most 16 million pixels; up to 149 detected horizontal bands. Rotated/skewed photographs, borderless tables, compressed or blurry images, arbitrary merged cells, multiple different column layouts and handwriting are unsupported. Unsupported layouts fail with a safe message; OCR can still miss rows, so the explicit human count/content review is mandatory. Text and colors are not used to infer fragment counts or cryovial counts. Existing spreadsheet upload remains available.
+
+OCR is loaded only when PNG is selected. `scripts/prepare-ocr.mjs` copies the pinned dependencies into ignored `public/ocr/` during build; CI deploys these static assets with `dist`. No CDN paths are used at runtime. The English model is about 11 MB and the selected OCR core about 4 MB before transfer compression; the initial image read can take longer on slower devices/connections. Runtime assets may enter ordinary HTTP caches, but image/specimen data does not. Worker language caching is disabled (`cacheMethod: none`). Reset, workflow switching, replacement and pagehide abort pending image work; completed workers terminate, canvases are cleared, and only confirmed controlled values remain in memory. Image reading has a two-minute timeout.
+
+Engine documentation: https://github.com/naptha/tesseract.js/blob/master/docs/local-installation.md . Engine/core use Apache-2.0; the English model package declares MIT. Build output includes engine/core license notices. See the pinned packages for complete dependency notices.
+
 ## BSI-managed fields and CSV
 
 The exact ordered schemas are centralized in `src/rules/config.ts` and asserted independently in tests. BSI itself assigns blank Sample ID, Sequence, BSI ID, Freezer, Rack, Box, Row and Col; Endoscopy additionally leaves Vial Location ID blank. Other prescribed blank fields remain present. Frederick manual Volume is blank. Empty preview cells are shown as dashes, but CSV cells are truly empty. No placeholder or BSI assignment command is generated.
@@ -77,7 +96,7 @@ npm run test:e2e
 npm audit
 ```
 
-Unit tests cover PHI removal, exact schemas, constants, protected fields, stable grouping, Slide removal, Endoscopy filters and anatomy, local dates, validation, CSV round trips, and CSV/XLSX/XLS intake including merged headers. Browser tests use the production build to exercise both workflows, unknown-anatomy resolution, preview, clipboard, download, workflow switching, reset, zero post-load network requests and empty browser storage/cookies.
+Unit tests cover PHI removal, exact schemas, constants, protected fields, stable grouping, Slide removal, Endoscopy filters and anatomy, local dates, validation, CSV round trips, and CSV/XLSX/XLS intake including merged headers. Browser tests use the production build to exercise both workflows, unknown-anatomy resolution, preview, clipboard, download, workflow switching, reset, zero post-load network requests for spreadsheet processing and empty browser storage/cookies. The PNG browser test exercises real OCR with a synthetic image containing PHI sentinels, mandatory review, corrections, exclusion rules, invalidation after editing, same-origin static GET-only requests and no IndexedDB persistence.
 
 No Frederick sample was present in the initially empty repository or supplied attachments. `src/tests/fixtures.ts` therefore contains explicitly synthetic Frederick and Endoscopy regression data with PHI sentinel strings. No real patient data is included. A real-sample regression remains unavailable until an appropriately sanitized sample is provided.
 

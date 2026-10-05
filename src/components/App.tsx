@@ -1,3 +1,5 @@
+import ImageReview from './ImageReview';
+import {imageDataset,type ImageReview as ImageReviewData} from '../parsers/imageTable';
 import {useEffect,useRef,useState} from 'react';
 import {fieldKind,LIMITS,SCHEMAS,type Workflow} from '../rules/config';
 import {VOCABULARY} from '../rules/anatomy';
@@ -9,6 +11,9 @@ const warning = 'IMPORTANT: If you have a vial that has less fragments and thus 
 export default function App() {
  const [workflow,setWorkflow]=useState<Workflow|null>(null);
  const [intake,setIntake]=useState<IntakeResult|null>(null);
+ const [imageReview,setImageReview]=useState<ImageReviewData|null>(null);
+ const [imageConfirmed,setImageConfirmed]=useState(false);
+ const imageAbort=useRef<AbortController|null>(null);
  const [sheet,setSheet]=useState(0);
  const [subject,setSubject]=useState(''); const [drawn,setDrawn]=useState('');
  const [resolutions,setResolutions]=useState<Record<number,string>>({});
@@ -16,20 +21,30 @@ export default function App() {
  const [error,setError]=useState(''); const [status,setStatus]=useState('');
  const [busy,setBusy]=useState(false); const [generated,setGenerated]=useState(false);
  const [page,setPage]=useState(0); const token=useRef(0); const fileInput=useRef<HTMLInputElement>(null);
- function clear() {token.current++;setIntake(null);setSheet(0);setSubject('');setDrawn('');setResolutions({});setDrafts({});setError('');setStatus('');setBusy(false);setGenerated(false);setPage(0);if(fileInput.current)fileInput.current.value='';}
+ function clear() {token.current++;imageAbort.current?.abort();imageAbort.current=null;setImageReview(null);setImageConfirmed(false);setIntake(null);setSheet(0);setSubject('');setDrawn('');setResolutions({});setDrafts({});setError('');setStatus('');setBusy(false);setGenerated(false);setPage(0);if(fileInput.current)fileInput.current.value='';}
  useEffect(()=>{const release=()=>clear();window.addEventListener('pagehide',release);return()=>window.removeEventListener('pagehide',release);},[]);
  const dataset=intake?.sheets[sheet];
  let result: Result|null=null; let validation='';
  if(dataset && workflow && (workflow === 'Frederick' || (subject && drawn))) {try {result=transform(dataset,workflow,{subject,drawn},resolutions);}catch{validation='Enter a valid Subject ID and Date Drawn. Formula prefixes, tabs and line breaks are not allowed in Subject ID.';}}
- const ready=!!result && result.rows.length>0 && result.issues.length===0;
+ const ready=(!imageReview || imageConfirmed) && !!result && result.rows.length>0 && result.issues.length===0;
  const csv=generated && ready && workflow ? toCSV(workflow,result!.rows):'';
  function changed() {setGenerated(false);setStatus('');setPage(0);}
  async function upload(file?:File) {
   clear();if(!file || !workflow)return;
   const current=token.current;
-  if(!/\.(csv|xlsx|xls)$/i.test(file.name) || file.size>LIMITS.bytes){setError('Choose a CSV, XLSX or XLS file up to 20 MB.');return;}
+  const png=workflow==='Endoscopy' && /\.png$/i.test(file.name);
+  if((!png && !/\.(csv|xlsx|xls)$/i.test(file.name)) || file.size>LIMITS.bytes){setError('Choose a supported file up to 20 MB. PNG images are supported for Endoscopy.');return;}
   setBusy(true);
-  try {const data=await file.arrayBuffer();if(current!==token.current)return;const parsed=parseBytes(data,workflow,/\.csv$/i.test(file.name)?'csv':'excel');setIntake(parsed);setStatus('File read and sanitized locally.');}
+  try {
+   if(png){
+    const controller=new AbortController();imageAbort.current=controller;
+    const {parsePNG}=await import('../parsers/png');
+    if(current!==token.current)return;
+    const review=await parsePNG(file,controller.signal,message=>{if(current===token.current)setStatus(message);});
+    if(current!==token.current)return;
+    setImageReview(review);setStatus('Local image reading complete. Review and confirm every row.');return;
+   }
+   const data=await file.arrayBuffer();if(current!==token.current)return;const parsed=parseBytes(data,workflow,/\.csv$/i.test(file.name)?'csv':'excel');setIntake(parsed);setStatus('File read and sanitized locally.');}
   catch(e){if(current===token.current)setError(e instanceof Error ? e.message : 'Unable to read this file.');}
   finally {if(current===token.current)setBusy(false);}
  }
@@ -41,7 +56,8 @@ export default function App() {
   <nav aria-label="Choose workflow" className="choices">{(['Frederick','Endoscopy'] as Workflow[]).map(w=><button key={w} aria-pressed={workflow===w} onClick={()=>{clear();setWorkflow(w);}}><strong>{w}</strong><span>{w==='Frederick'?'Shipping manifests · material grouping':'Biopsy specimens · anatomical mapping'}</span></button>)}</nav>
   {!workflow?<p className="welcome">Choose a workflow to prepare your BSI import.</p>:<>
    <div className="toolbar"><h2>{workflow} preparation</h2><button onClick={clear}>Reset / Clear file</button></div>
-   <section><h3><b>1</b> Upload</h3><label htmlFor="upload">Source spreadsheet</label><input ref={fileInput} id="upload" type="file" accept=".csv,.xlsx,.xls" onChange={e=>{const file=e.target.files?.[0];e.target.value='';void upload(file);}}/><p className="hint">CSV, XLSX or XLS · up to 20 MB · one specimen per source row. File names are not retained.</p>{busy&&<p role="status">Reading and sanitizing…</p>}{intake && intake.sheets.length>1&&<label>Worksheet with recognized headers<select value={sheet} onChange={e=>{setSheet(Number(e.target.value));setResolutions({});changed();}}>{intake.sheets.map((_,i)=><option key={i} value={i}>Recognized worksheet {i+1}</option>)}</select></label>}{dataset&&<p className="success">{dataset.removedPHI} potentially identifying columns removed before processing.</p>}</section>
+   <section><h3><b>1</b> Upload</h3><label htmlFor="upload">{workflow==='Endoscopy'?'Source spreadsheet or PNG':'Source spreadsheet'}</label><input ref={fileInput} id="upload" type="file" accept={workflow==='Endoscopy'?'.csv,.xlsx,.xls,.png':'.csv,.xlsx,.xls'} onChange={e=>{const file=e.target.files?.[0];e.target.value='';void upload(file);}}/><p className="hint">{workflow==='Endoscopy'?'CSV, XLSX, XLS or PNG':'CSV, XLSX or XLS'} · up to 20 MB · one specimen per source row. File names are not retained.</p>{busy&&<p role="status">Reading and sanitizing…</p>}{intake && intake.sheets.length>1&&<label>Worksheet with recognized headers<select value={sheet} onChange={e=>{setSheet(Number(e.target.value));setResolutions({});changed();}}>{intake.sheets.map((_,i)=><option key={i} value={i}>Recognized worksheet {i+1}</option>)}</select></label>}{dataset&&<p className="success">{dataset.removedPHI} potentially identifying columns removed before processing.</p>}</section>
+   {imageReview&&<ImageReview review={imageReview} confirmed={imageConfirmed} onChange={review=>{setImageReview(review);setImageConfirmed(false);setIntake(null);setResolutions({});setDrafts({});changed();}} onConfirm={()=>{setIntake({sheets:[imageDataset(imageReview)]});setImageConfirmed(true);changed();}}/>}
    <section><h3><b>2</b> {workflow==='Frederick'?'Source Fields':'Enter Required Fields'}</h3>{workflow==='Frederick'?<p>Excel workbooks use the Klion worksheet automatically. Subject ID and Date Drawn come from each specimen row. CSV files must contain these same columns.</p>:<div className="fields"><label>Subject ID<input autoComplete="off" value={subject} onChange={e=>{setSubject(e.target.value);changed();}} disabled={!dataset}/></label><label>Date Drawn<input type="date" value={drawn} onChange={e=>{setDrawn(e.target.value);changed();}} disabled={!dataset}/></label></div>}<p className="hint">Fields assigned by BSI are intentionally left blank. After pasting the complete block into BSI, use the normal BSI assignment functions for those fields.</p>{workflow==='Frederick'&&<p className="hint">Volume is configured as a protected, manually assigned field and remains blank.</p>}</section>
    <section><h3><b>3</b> Review Transformation</h3>{!result?<p>{workflow==='Frederick'?'Upload the Klion workbook or its CSV export to preview the result.':'Upload a file and enter the required fields to preview the result.'}</p>:<>
     <dl className="stats"><div><dt>Original rows</dt><dd>{dataset!.originalRows}</dd></div><div><dt>Usable specimen rows</dt><dd>{result.rows.length+result.issues.length}</dd></div><div><dt>PHI columns removed</dt><dd>{dataset!.removedPHI}</dd></div><div><dt>{workflow==='Frederick'?'Slide rows removed':'Section / unmatched rows'}</dt><dd>{workflow==='Frederick'?result.slides:result.excluded}</dd></div><div><dt>Final output rows</dt><dd>{result.rows.length}</dd></div></dl>

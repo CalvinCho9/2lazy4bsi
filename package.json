@@ -5,7 +5,7 @@
   "type": "module",
   "scripts": {
     "dev": "npm run build && vite preview --host 127.0.0.1 --port 5173",
-    "build": "tsc -b && vite build",
+    "build": "node scripts/prepare-ocr.mjs && tsc -b && vite build",
     "preview": "vite preview --host 127.0.0.1",
     "test": "vitest run",
     "test:e2e": "playwright test"
@@ -13,10 +13,12 @@
   "dependencies": {
     "react": "^19.0.0",
     "react-dom": "^19.0.0",
+    "tesseract.js": "^7.0.0",
     "xlsx": "file:vendor/xlsx-0.20.3.tgz"
   },
   "devDependencies": {
     "@playwright/test": "^1.56.0",
+    "@tesseract.js-data/eng": "^1.0.0",
     "@types/react": "^19.0.0",
     "@types/react-dom": "^19.0.0",
     "@vitejs/plugin-react": "^4.7.0",
