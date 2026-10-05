@@ -1,23 +1,28 @@
 import {BSI_FIELDS, CONSTANTS, FREDERICK_VOLUME_MODE, LABEL, SCHEMAS, type Workflow} from '../rules/config';
 import {mapAnatomy, REGIONS, VOCABULARY} from '../rules/anatomy';
 import type {Dataset} from '../parsers/intake';
-import {dateDrawn, match, modifiers, received, whitespace} from '../utils/normalize';
+import {dateDrawn, sourceDate, match, modifiers, received, whitespace} from '../utils/normalize';
 import {safeSource, validateFields, type UserFields} from '../validators/fields';
 export type Issue = {line:number; message:string};
 export type Result = {rows: Record<string,string>[]; issues: Issue[]; slides:number; excluded:number; groups: [string,number][]};
 export function transform(dataset: Dataset, workflow: Workflow, fields: UserFields, resolutions: Record<number,string> = {}, now = new Date(), volumeMode: 'manual'|'source' = FREDERICK_VOLUME_MODE): Result {
- validateFields(fields);
+ if (workflow === 'Endoscopy') validateFields(fields);
  const result: Result = {rows:[],issues:[],slides:0,excluded:0,groups:[]};
  const grouped = new Map<string, Record<string,string>[]>();
  let region = '';
  for (const source of dataset.rows) {
   const v = source.values;
   const row: Record<string,string> = Object.fromEntries(SCHEMAS[workflow].map(h=>[h,'']));
-  Object.assign(row,CONSTANTS,{'Subject ID':fields.subject.trim(),'Date Drawn':dateDrawn(fields.drawn)});
+  Object.assign(row,CONSTANTS);
+  if (workflow === 'Endoscopy') Object.assign(row,{'Subject ID':fields.subject.trim(),'Date Drawn':dateDrawn(fields.drawn)});
   if (workflow === 'Frederick') {
    const material = v['Material Type']?.trim() ?? '';
    if (match(material) === 'slide') {result.slides++;continue;}
    if (!material) {result.issues.push({line:source.line,message:'Material Type is missing.'});continue;}
+   const subject = (v['Subject ID'] ?? '').trim();
+   if (!subject || !safeSource(subject) || /[\r\n\t]/.test(subject)) {result.issues.push({line:source.line,message:'Subject ID is missing or invalid. Correct this row in the source file.'});continue;}
+   try {row['Date Drawn'] = sourceDate(v['Date Drawn'] ?? '');} catch {result.issues.push({line:source.line,message:'Date Drawn is missing or invalid. Use an Excel date, YYYY-MM-DD or MM/DD/YYYY in the source file.'});continue;}
+   row['Subject ID'] = subject;
    const modifier = modifiers(v['Material Modifier'] ?? '');
    const unit = (v['Volume Unit'] ?? '').trim();
    if (![material,modifier,unit].every(safeSource)) {result.issues.push({line:source.line,message:'A source field has an unsafe spreadsheet formula prefix. Correct the source file.'});continue;}

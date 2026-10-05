@@ -6,9 +6,9 @@ test('Frederick upload, review, clipboard, download, reset and no network or sto
  await page.goto('/');
  const requests:string[]=[];page.on('request',r=>requests.push(r.url()));
  await page.getByRole('button',{name:/Frederick/}).click();
- await page.getByLabel('Source spreadsheet').setInputFiles({name:'synthetic.csv',mimeType:'text/csv',buffer:Buffer.from('Material Type,Material Modifier,MRN,First Name\nPlasma,Frozen,SECRET,SECRET\nSlide,,SECRET,SECRET\nSerum,,SECRET,SECRET\nPlasma,,SECRET,SECRET')});
+ await page.getByLabel('Source spreadsheet').setInputFiles({name:'synthetic.csv',mimeType:'text/csv',buffer:Buffer.from('Material Type,Material Modifier,MRN,First Name,Subject ID,Date Drawn\nPlasma,Frozen,SECRET,SECRET,TEST-001,2026-10-05\nSlide,,SECRET,SECRET,,\nSerum,,SECRET,SECRET,TEST-002,10/04/2026\nPlasma,,SECRET,SECRET,TEST-003,2026-10-03')});
  await expect(page.getByText('2 potentially identifying columns removed before processing.')).toBeVisible();
- await page.getByLabel('Subject ID',{exact:true}).fill('TEST-001');await page.getByLabel('Date Drawn',{exact:true}).fill('2026-10-05');
+ await expect(page.getByLabel('Subject ID',{exact:true})).toHaveCount(0);
  await expect(page.getByRole('cell',{name:'Plasma',exact:true})).toHaveCount(2);
  await expect(page.locator('body')).not.toContainText('SECRET');
  await page.getByRole('button',{name:'Generate BSI CSV',exact:true}).click();
@@ -17,7 +17,7 @@ test('Frederick upload, review, clipboard, download, reset and no network or sto
  const download=page.waitForEvent('download');await page.getByRole('button',{name:'Download CSV'}).click();expect((await download).suggestedFilename()).toMatch(/^FREDERICK_BSI_IMPORT_/);
  expect(await page.evaluate(()=>({local:localStorage.length,session:sessionStorage.length,cookies:document.cookie}))).toEqual({local:0,session:0,cookies:''});
  expect(requests).toEqual([]);
- await page.getByRole('button',{name:'Reset / Clear file'}).click();await expect(page.getByLabel('Subject ID',{exact:true})).toHaveValue('');await expect(page.getByLabel('Complete CSV text')).toHaveCount(0);
+ await page.getByRole('button',{name:'Reset / Clear file'}).click();await expect(page.getByLabel('Subject ID',{exact:true})).toHaveCount(0);await expect(page.getByLabel('Complete CSV text')).toHaveCount(0);
 });
 test('Endoscopy XLSX and controlled anatomy resolution',async({page})=>{
  await page.goto('/');await page.getByRole('button',{name:/Endoscopy/}).click();
@@ -30,5 +30,17 @@ test('Endoscopy XLSX and controlled anatomy resolution',async({page})=>{
  await expect(page.getByRole('button',{name:'Generate BSI CSV',exact:true})).toBeEnabled();
  await expect(page.getByText(/IMPORTANT: If you have a vial/)).toBeVisible();
  await page.getByRole('button',{name:'Generate BSI CSV',exact:true}).click();expect(await page.getByLabel('Complete CSV text').inputValue()).toContain('ILEUM; TERMINAL');
- await page.getByRole('button',{name:/Frederick/}).click();await expect(page.getByLabel('Subject ID',{exact:true})).toHaveValue('');
+ await page.getByRole('button',{name:/Frederick/}).click();await expect(page.getByLabel('Subject ID',{exact:true})).toHaveCount(0);
+});
+test('Frederick uses Klion and previews each source subject and date without manual inputs',async({page})=>{
+ await page.goto('/');await page.getByRole('button',{name:/Frederick/}).click();
+ const book=XLSX.utils.book_new();
+ XLSX.utils.book_append_sheet(book,XLSX.utils.aoa_to_sheet([['Material Type','Subject ID','Date Drawn'],['Plasma','WRONG-SHEET','2026-01-01']]),'Other');
+ XLSX.utils.book_append_sheet(book,XLSX.utils.aoa_to_sheet([['Material Type','Subject ID','Date Drawn'],['Serum','001','2026-10-05'],['Plasma','002','10/04/2026']]),'Klion');
+ await page.getByLabel('Source spreadsheet').setInputFiles({name:'multi.xlsx',mimeType:'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',buffer:XLSX.write(book,{type:'buffer',bookType:'xlsx'})});
+ await expect(page.getByRole('cell',{name:'001',exact:true})).toBeVisible();
+ await expect(page.getByRole('cell',{name:'10/04/2026',exact:true})).toBeVisible();
+ await expect(page.getByLabel('Subject ID',{exact:true})).toHaveCount(0);
+ await expect(page.locator('body')).not.toContainText('WRONG-SHEET');
+ await expect(page.getByRole('button',{name:'Generate BSI CSV',exact:true})).toBeEnabled();
 });

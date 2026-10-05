@@ -9,15 +9,16 @@ export const BSI_FIELDS = ['Sample ID','Sequence','BSI ID','Freezer','Rack','Box
 export const CONSTANTS = {'Protocol':'94-I-0079','Volume Estimate':'Estimated','Label Status':'Printed','Study ID':'EPU specimen storage','Tests':'0','Thaws':'0','Vial Status':'ln'};
 export const LABEL = '@copy("vial.bsi_id")';
 export const ALIASES: Record<string, string[]> = {
+ 'Subject ID':['subject id','subject identifier'], 'Date Drawn':['date drawn','draw date'],
  'Material Type':['material type','mattype'], 'Material Modifier':['material modifier','material modifiers'],
  'Volume':['volume'], 'Volume Unit':['volume unit','volume units'],
  'Anatomical Location':['anatomical location','anatomic location'], 'Container':['container'], 'Going where?':['going where','destination'],
 };
-export const REQUIRED: Record<Workflow,string[]> = {Frederick:['Material Type'],Endoscopy:['Anatomical Location','Container','Going where?']};
+export const REQUIRED: Record<Workflow,string[]> = {Frederick:['Material Type','Subject ID','Date Drawn'],Endoscopy:['Anatomical Location','Container','Going where?']};
 export const LIMITS = { bytes: 20 * 1024 * 1024, rows: 50000, columns: 256 };
 export function fieldKind(workflow: Workflow, field: string) {
  if (BSI_FIELDS.includes(field) || (workflow === 'Frederick' && field === 'Volume' && FREDERICK_VOLUME_MODE === 'manual')) return 'BSI assigns later';
- if (['Subject ID','Date Drawn'].includes(field)) return 'User provided';
+ if (['Subject ID','Date Drawn'].includes(field)) return workflow === 'Frederick' ? 'From source' : 'User provided';
  if (workflow === 'Frederick' && ['Material Type','Material Modifiers','Volume','Volume Unit'].includes(field)) return 'From source';
  return 'Generated';
 }

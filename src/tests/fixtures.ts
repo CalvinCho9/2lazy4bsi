@@ -1,7 +1,7 @@
 export const frederick = [
  ['Synthetic shipping manifest'],
  ['Box','row','col','scan','match','Date Drawn','M#','Sample ID','Sequence','BSI ID','MRN','Subject ID','Last Name','First Name','Protocol ID','Sample From','Material Type','Material Modifier','Volume','Volume Unit','label mattype','Comments'],
- ...['Mononuclear Cells','Plasma','Serum','Plasma','RNA-Cell','Serum',' Slide '].map((material,i)=>['B1','1','1','','','2026-10-01','','old sample','old seq','old bsi','SECRET_MRN','old subject','SECRET_LAST','SECRET_FIRST','','',material,`modifier ${i}`,'0.5','ml','','SECRET_COMMENT']),
+ ...['Mononuclear Cells','Plasma','Serum','Plasma','RNA-Cell','Serum',' Slide '].map((material,i)=>['B1','1','1','','','2026-10-01','','old sample','old seq','old bsi','SECRET_MRN',`TEST-SUBJECT-${i}`,'SECRET_LAST','SECRET_FIRST','','',material,`modifier ${i}`,'0.5','ml','','SECRET_COMMENT']),
  [],
 ];
 export const endoscopy = [

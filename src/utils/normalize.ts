@@ -12,3 +12,12 @@ export function dateDrawn(value: string): string {
  return `${m[2]}/${m[3]}/${m[1]}`;
 }
 export function received(date = new Date()): string {return `${dateDrawn(localISO(date))} 00:00`;}
+
+// Text dates use explicit year-first ISO or US month/day/year; never locale guessing.
+export function sourceDate(value: string): string {
+ const text = value.trim();
+ if (/^\d{4}-\d{2}-\d{2}$/.test(text)) return dateDrawn(text);
+ const m = /^(\d{1,2})\/(\d{1,2})\/(\d{4})$/.exec(text);
+ if (!m) throw new Error('Invalid source date.');
+ return dateDrawn(`${m[3]}-${m[1].padStart(2,'0')}-${m[2].padStart(2,'0')}`);
+}

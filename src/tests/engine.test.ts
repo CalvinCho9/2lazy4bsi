@@ -16,7 +16,7 @@ describe('privacy boundary',()=>{
  it('preserves Subject ID as user field, removes identifying data and unused columns before transformation',()=>{
   const safe=sanitizeMatrix(frederick,'Frederick');expect(safe.removedPHI).toBe(3);
   expect(JSON.stringify(safe)).not.toMatch(/SECRET|MRN|Last Name|First Name|Comments/);
-  const output=toCSV('Frederick',f().rows);expect(output).toContain('Subject ID');expect(output).toContain(fields.subject);expect(output).not.toMatch(/SECRET|MRN|Last Name|First Name/);
+  const output=toCSV('Frederick',f().rows);expect(output).toContain('Subject ID');expect(output).toContain('TEST-SUBJECT-0');expect(output).not.toMatch(/SECRET|MRN|Last Name|First Name/);
  });
 });
 describe('Frederick',()=>{
@@ -24,7 +24,7 @@ describe('Frederick',()=>{
  it('has exact ordered schema',()=>expect(Object.keys(f().rows[0]).join('|')).toBe('Sample ID|Sequence|BSI ID|Subject ID|Date Drawn|Protocol|Material Type|Material Modifiers|Volume|Volume Unit|Volume Estimate|Current label|Label Status|Study ID|Tests|Thaws|Vial Status|Freezer|Rack|Box|Row|Col'));
  it('keeps assigned fields blank and exact constants',()=>{for(const row of f().rows){for(const h of BSI_FIELDS.filter(x=>x in row))expect(row[h]).toBe('');expect(row).toMatchObject(CONSTANTS);expect(row['Current label']).toBe(LABEL);expect(row.Volume).toBe('');}});
  it('configures source volume explicitly and blocks invalid values',()=>{const d=sanitizeMatrix(frederick,'Frederick');expect(transform(d,'Frederick',fields,{},new Date(),'source').rows[0].Volume).toBe('0.5');d.rows[0].values.Volume='bad';expect(transform(d,'Frederick',fields,{},new Date(),'source').issues).toHaveLength(1);});
- it('blocks missing material and unsafe source formulas',()=>{const d=sanitizeMatrix([['Material Type'],['=HYPERLINK("bad")']],'Frederick');expect(transform(d,'Frederick',fields).issues).toHaveLength(1);});
+ it('blocks missing material and unsafe source formulas',()=>{const d=sanitizeMatrix([['Material Type','Subject ID','Date Drawn'],['=HYPERLINK("bad")','TEST','2026-10-05']],'Frederick');expect(transform(d,'Frederick',fields).issues).toHaveLength(1);});
 });
 describe('Endoscopy',()=>{
  it('filters NIH rows, inherits sections and maps all required examples',()=>{expect(e().issues).toEqual([]);expect(e().rows.map(x=>x['Material Modifiers'])).toEqual(['ESOPHAGUS; PROXIMAL; MIDDLE','ESOPHAGUS; DISTAL','GASTRIC; BODY STOMACH','GASTRIC; ANTRUM','DUODENUM; 2ND DUODENUM; 3RD DUODENUM','ILEUM; TERMINAL','ASC COLON','DSC COLON']);});
@@ -36,11 +36,37 @@ describe('Endoscopy',()=>{
 });
 describe('intake and export',()=>{
  it.each(['csv','xlsx','biff8'] as const)('parses %s locally including sections and blanks',bookType=>{const book=XLSX.utils.book_new();const sheet=XLSX.utils.aoa_to_sheet(endoscopy);sheet['!merges']=[{s:{r:2,c:0},e:{r:2,c:5}}];XLSX.utils.book_append_sheet(book,sheet,'Synthetic');const bytes=XLSX.write(book,{type:'array',bookType});const d=parseBytes(bytes,'Endoscopy');expect(transform(d.sheets[0],'Endoscopy',fields).rows).toHaveLength(8);expect(JSON.stringify(d)).not.toContain('SECRET');});
- it('validates missing and duplicate fields',()=>{expect(()=>sanitizeMatrix([['Container']],'Endoscopy')).toThrow('Anatomical Location');expect(()=>sanitizeMatrix([['Material Type','Material type']],'Frederick')).toThrow('Duplicate');});
+ it('validates missing and duplicate fields',()=>{expect(()=>sanitizeMatrix([['Container']],'Endoscopy')).toThrow('Anatomical Location');expect(()=>sanitizeMatrix([['Material Type','Material type','Subject ID','Date Drawn']],'Frederick')).toThrow('Duplicate');});
  it('rejects PHI headers masquerading as aliases',()=>expect(()=>sanitizeMatrix([['Material Type name'],['Plasma']],'Frederick')).toThrow());
- it('escapes commas quotes and newlines and preserves blank cells',()=>{const row={...f().rows[0],'Material Modifiers':'one, "two"\nthree'};const csv=toCSV('Frederick',[row]);const parsed=XLSX.utils.sheet_to_json<string[]>(XLSX.read(csv,{type:'string',raw:true}).Sheets.Sheet1,{header:1,defval:''});expect(parsed[1]).toHaveLength(22);expect(parsed[1][7]).toBe(row['Material Modifiers']);expect(csv).toContain(',,,TEST-SUBJECT');});
+ it('escapes commas quotes and newlines and preserves blank cells',()=>{const row={...f().rows[0],'Material Modifiers':'one, "two"\nthree'};const csv=toCSV('Frederick',[row]);const parsed=XLSX.utils.sheet_to_json<string[]>(XLSX.read(csv,{type:'string',raw:true}).Sheets.Sheet1,{header:1,defval:''});expect(parsed[1]).toHaveLength(22);expect(parsed[1][7]).toBe(row['Material Modifiers']);expect(csv).toContain(',,,TEST-SUBJECT-0');});
  it.each(['Frederick','Endoscopy'] as const)('never invents null placeholders for %s',w=>{const csv=toCSV(w,w==='Frederick'?f().rows:e().rows);expect(csv).not.toMatch(/undefined|null|NaN/);expect(csv.split('\r\n')[0]).toBe(SCHEMAS[w].join(','));});
  it('normalizes modifiers without duplicate entities',()=>expect(modifiers('A;; B; A; ')).toBe('A; B'));
  it('validates calendar dates and uses local calendar day',()=>{expect(()=>dateDrawn('2026-02-30')).toThrow();expect(received(new Date(2026,0,2,23,59))).toBe('01/02/2026 00:00');});
- it('blocks unsafe subject formulas',()=>expect(()=>transform(sanitizeMatrix(frederick,'Frederick'),'Frederick',{...fields,subject:'=bad'})).toThrow());
+ it('blocks unsafe Endoscopy subject formulas',()=>expect(()=>transform(sanitizeMatrix(endoscopy,'Endoscopy'),'Endoscopy',{...fields,subject:'=bad'})).toThrow());
+});
+
+describe('Frederick Klion source fields',()=>{
+ it('preserves row-specific subjects and dates through grouping without UI overrides',()=>{
+  const d=sanitizeMatrix([['Material Type','Subject ID','Date Drawn'],['Plasma','001','2026-10-01'],['Serum','002','10/2/2026'],['Plasma','003','2026-10-03']],'Frederick');
+  expect(transform(d,'Frederick',{subject:'override',drawn:'invalid'}).rows.map(r=>[r['Subject ID'],r['Date Drawn']])).toEqual([['001','10/01/2026'],['003','10/03/2026'],['002','10/02/2026']]);
+ });
+ it.each(['xlsx','biff8'] as const)('selects only Klion from %s and normalizes real Excel dates',bookType=>{
+  const book=XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(book,XLSX.utils.aoa_to_sheet(frederick),'Wrong sheet');
+  const sheet=XLSX.utils.aoa_to_sheet([['Material Type','Subject ID','Date Drawn','MRN'],['Plasma','0007',new Date(2026,9,5),'SECRET']]);
+  sheet.C2.z='dd-mmm-yyyy'; delete sheet.C2.w;
+  XLSX.utils.book_append_sheet(book,sheet,'Klion');
+  const parsed=parseBytes(XLSX.write(book,{type:'array',bookType}),'Frederick');
+  expect(parsed.sheets).toHaveLength(1);
+  expect(transform(parsed.sheets[0],'Frederick',{subject:'',drawn:''}).rows[0]).toMatchObject({'Subject ID':'0007','Date Drawn':'10/05/2026'});
+  expect(JSON.stringify(parsed)).not.toContain('SECRET');
+ });
+ it('rejects a workbook missing Klion even when another sheet has matching columns',()=>{
+  const book=XLSX.utils.book_new();XLSX.utils.book_append_sheet(book,XLSX.utils.aoa_to_sheet(frederick),'Other');
+  expect(()=>parseBytes(XLSX.write(book,{type:'array',bookType:'xlsx'}),'Frederick')).toThrow('worksheet titled Klion');
+ });
+ it('blocks missing row fields and invalid dates without exposing values',()=>{
+  const d=sanitizeMatrix([['Material Type','Subject ID','Date Drawn'],['Plasma','','2026-10-01'],['Plasma','TEST','02/30/2026'],['Slide','','']],'Frederick');
+  const result=transform(d,'Frederick',{subject:'',drawn:''});expect(result.issues).toHaveLength(2);expect(result.rows).toHaveLength(0);expect(result.slides).toBe(1);
+ });
 });
