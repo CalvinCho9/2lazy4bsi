@@ -93,3 +93,20 @@ describe('source volume and exact vial status export',()=>{
   for(const row of table.slice(1)){expect(row).toHaveLength(SCHEMAS[workflow].length);expect(row[index]).toBe('ln');expect([...row[index]].map(c=>c.charCodeAt(0))).toEqual([108,110]);}
  });
 });
+
+describe('Excel serial Date Drawn export',()=>{
+ it.each([['xlsx',false,46300],['xlsx',true,44838],['biff8',false,46300],['xlsx',false,'46300'],['csv',false,'46300.75']] as const)('converts %s serial dates (1904=%s, value=%s) to CSV date text', (bookType,date1904,value)=>{
+  const book=XLSX.utils.book_new();book.Workbook={WBProps:{date1904}};
+  const sheet=XLSX.utils.aoa_to_sheet([['Material Type','Subject ID','Date Drawn'],['Plasma','TEST',value]]);
+  XLSX.utils.book_append_sheet(book,sheet,'Klion');
+  const d=parseBytes(XLSX.write(book,{type:'array',bookType}),'Frederick',bookType==='csv'?'csv':'excel').sheets[0];
+  const result=transform(d,'Frederick',{subject:'',drawn:''});expect(result.issues).toEqual([]);
+  expect(result.rows[0]['Date Drawn']).toBe('10/05/2026');
+  const csv=toCSV('Frederick',result.rows);expect(csv).toContain(',10/05/2026,');expect(csv).not.toContain(String(value));
+ });
+ it.each([0,60,99999999])('blocks invalid serial %s without inventing a date',value=>{
+  const book=XLSX.utils.book_new();XLSX.utils.book_append_sheet(book,XLSX.utils.aoa_to_sheet([['Material Type','Subject ID','Date Drawn'],['Plasma','TEST',value]]),'Klion');
+  const d=parseBytes(XLSX.write(book,{type:'array',bookType:'xlsx'}),'Frederick').sheets[0];
+  expect(transform(d,'Frederick',{subject:'',drawn:''}).issues).toHaveLength(1);
+ });
+});

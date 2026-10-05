@@ -1,5 +1,5 @@
 import * as XLSX from 'xlsx';
-import {ALIASES, LIMITS, REQUIRED, type Workflow} from '../rules/config';
+import {ALIASES, CSV_DATE_SYSTEM, LIMITS, REQUIRED, type Workflow} from '../rules/config';
 import {isPHI, safeColumnIndexes} from '../security/sanitize';
 import {blankRow, header} from '../utils/normalize';
 export type SafeRow = { line: number; values: Record<string,string> };
@@ -51,8 +51,12 @@ export function parseBytes(data: ArrayBuffer, workflow: Workflow, format: 'csv' 
       const volumeCell = volumeColumn >= 0 ? sheet[XLSX.utils.encode_cell({r:row.line-1,c:volumeColumn})] : undefined;
       if (volumeCell?.t === 'n' && Number.isFinite(volumeCell.v)) row.values.Volume = String(volumeCell.v);
       const cell = sheet[XLSX.utils.encode_cell({r:row.line-1,c:dateColumn})];
-      if (cell?.t === 'n' && cell.z && XLSX.SSF.is_date(cell.z)) {
-       const date = XLSX.SSF.parse_date_code(cell.v,{date1904:!!book.Workbook?.WBProps?.date1904});
+      // Date Drawn is semantically a date even when Excel stores it with General formatting.
+      const text = row.values['Date Drawn'].trim();
+      const serial = cell?.t === 'n' ? cell.v : /^\d+(?:\.\d+)?$/.test(text) ? Number(text) : undefined;
+      if (serial !== undefined) {
+       const date1904 = format === 'excel' ? !!book.Workbook?.WBProps?.date1904 : CSV_DATE_SYSTEM === '1904';
+       const date = Number.isFinite(serial) && serial >= (date1904 ? 0 : 1) && (date1904 || Math.floor(serial) !== 60) ? XLSX.SSF.parse_date_code(serial,{date1904}) : null;
        row.values['Date Drawn'] = date ? `${String(date.y).padStart(4,'0')}-${String(date.m).padStart(2,'0')}-${String(date.d).padStart(2,'0')}` : '';
       }
      }

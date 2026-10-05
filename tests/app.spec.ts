@@ -36,9 +36,10 @@ test('Frederick uses Klion and previews each source subject and date without man
  await page.goto('/');await page.getByRole('button',{name:/Frederick/}).click();
  const book=XLSX.utils.book_new();
  XLSX.utils.book_append_sheet(book,XLSX.utils.aoa_to_sheet([['Material Type','Subject ID','Date Drawn'],['Plasma','WRONG-SHEET','2026-01-01']]),'Other');
- XLSX.utils.book_append_sheet(book,XLSX.utils.aoa_to_sheet([['Material Type','Subject ID','Date Drawn'],['Serum','001','2026-10-05'],['Plasma','002','10/04/2026']]),'Klion');
+ XLSX.utils.book_append_sheet(book,XLSX.utils.aoa_to_sheet([['Material Type','Subject ID','Date Drawn'],['Serum','001',46300],['Plasma','002','10/04/2026']]),'Klion');
  await page.getByLabel(/Source spreadsheet/).setInputFiles({name:'multi.xlsx',mimeType:'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',buffer:XLSX.write(book,{type:'buffer',bookType:'xlsx'})});
  await expect(page.getByRole('cell',{name:'001',exact:true})).toBeVisible();
+ await expect(page.getByRole('cell',{name:'10/05/2026',exact:true})).toBeVisible();
  await expect(page.getByRole('cell',{name:'10/04/2026',exact:true})).toBeVisible();
  await expect(page.getByLabel('Subject ID',{exact:true})).toHaveCount(0);
  await expect(page.locator('body')).not.toContainText('WRONG-SHEET');

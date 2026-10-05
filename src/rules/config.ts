@@ -1,5 +1,7 @@
 export type Workflow = 'Frederick' | 'Endoscopy';
 export const PHI_DENYLIST = ['name', 'mrn', 'medical record', 'date of birth', 'dob'];
+// CSV has no workbook metadata; numeric Date Drawn values use Excel's 1900 date system.
+export const CSV_DATE_SYSTEM: '1900' | '1904' = '1900';
 export const FREDERICK_VOLUME_MODE: 'manual' | 'source' = 'source';
 export const SCHEMAS: Record<Workflow, readonly string[]> = {
  Frederick: ['Sample ID','Sequence','BSI ID','Subject ID','Date Drawn','Protocol','Material Type','Material Modifiers','Volume','Volume Unit','Volume Estimate','Current label','Label Status','Study ID','Tests','Thaws','Vial Status','Freezer','Rack','Box','Row','Col'],
