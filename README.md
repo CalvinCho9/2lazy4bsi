@@ -95,6 +95,12 @@ git push -u origin main
 
 Expected URL after successful deployment: https://calvincho9.github.io/2lazy4bsi/ . Merely pushing does not prove Pages is enabled or deployed. Repository administrators may need to enable Pages, Actions permissions or environment approval. No secrets are needed by the application. Do not add analytics or remote script tags.
 
+## Troubleshooting a blank GitHub Pages site
+
+Pages must use **Settings → Pages → Build and deployment → Source: GitHub Actions**. Do not select **Deploy from a branch / main / root**: that publishes the source `index.html`, which references `/src/main.tsx`. Browsers cannot run this TypeScript entry point. The workflow publishes the compiled `dist` directory, whose HTML references bundled JavaScript under `assets/`.
+
+If a deployment reports `Failed to create deployment (status: 404)`, enable Pages with the GitHub Actions source, then rerun **Test and deploy GitHub Pages** from the Actions tab. A successful **pages build and deployment** branch-publishing run is not the application's build workflow. After the correct deployment succeeds, reload the page; allow a short delay for GitHub's CDN to update. The workflow now checks Pages configuration before publishing.
+
 ## Maintenance and limitations
 
 - Change schemas, field categories, aliases, limits, constants and PHI denylist in `src/rules/config.ts`; anatomy vocabulary/rules in `src/rules/anatomy.ts`. Update exact-order/mapping tests when intentionally changing business rules.
