@@ -120,6 +120,8 @@ Pages must use **Settings → Pages → Build and deployment → Source: GitHub 
 
 If a deployment reports `Failed to create deployment (status: 404)`, enable Pages with the GitHub Actions source, then rerun **Test and deploy GitHub Pages** from the Actions tab. A successful **pages build and deployment** branch-publishing run is not the application's build workflow. After the correct deployment succeeds, reload the page; allow a short delay for GitHub's CDN to update. The workflow now checks Pages configuration before publishing.
 
+If a publish job fails with “The job was not acquired by Runner of type hosted” or a GitHub internal server error before any steps run, the new app has not been published; the previous site stays live. Rerun the failed jobs from Actions. The workflow pins Ubuntu 24.04 instead of the moving `ubuntu-latest` label. Successful build/tests alone do not mean the deployment succeeded.
+
 ## Maintenance and limitations
 
 - Change schemas, field categories, aliases, limits, constants and PHI denylist in `src/rules/config.ts`; anatomy vocabulary/rules in `src/rules/anatomy.ts`. Update exact-order/mapping tests when intentionally changing business rules.
