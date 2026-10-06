@@ -22,7 +22,7 @@ describe('privacy boundary',()=>{
 describe('Frederick',()=>{
  it('removes entire Slide rows and keeps stable first-seen groups',()=>{const r=f();expect(r.slides).toBe(1);expect(r.rows.map(x=>x['Material Type'])).toEqual(['Mononuclear Cells','Plasma','Plasma','Serum','Serum','RNA-Cell']);expect(r.rows.map(x=>x['Material Modifiers'])).toEqual(['modifier 0','modifier 1','modifier 3','modifier 2','modifier 5','modifier 4']);});
  it('has exact ordered schema',()=>expect(Object.keys(f().rows[0]).join('|')).toBe('Sample ID|Sequence|BSI ID|Subject ID|Date Drawn|Protocol|Material Type|Material Modifiers|Volume|Volume Unit|Volume Estimate|Current label|Label Status|Study ID|Tests|Thaws|Vial Status|Freezer|Rack|Box|Row|Col'));
- it('keeps assigned fields blank and exact constants',()=>{for(const row of f().rows){for(const h of BSI_FIELDS.filter(x=>x in row))expect(row[h]).toBe('');expect(row).toMatchObject(CONSTANTS);expect(row['Current label']).toBe(LABEL);expect(row.Volume).toBe('0.5');}});
+ it('keeps assigned fields blank and exact constants',()=>{for(const row of f().rows){for(const h of BSI_FIELDS.filter(x=>x in row))expect(row[h]).toBe('');expect(row).toMatchObject({...CONSTANTS,'Vial Status':'In'});expect(row['Current label']).toBe(LABEL);expect(row.Volume).toBe('0.5');}});
  it('configures source volume explicitly and blocks invalid values',()=>{const d=sanitizeMatrix(frederick,'Frederick');expect(transform(d,'Frederick',fields,{},new Date(),'source').rows[0].Volume).toBe('0.5');d.rows[0].values.Volume='bad';expect(transform(d,'Frederick',fields,{},new Date(),'source').issues).toHaveLength(1);});
  it('blocks missing material and unsafe source formulas',()=>{const d=sanitizeMatrix([['Material Type','Subject ID','Date Drawn'],['=HYPERLINK("bad")','TEST','2026-10-05']],'Frederick');expect(transform(d,'Frederick',fields).issues).toHaveLength(1);});
 });
@@ -84,13 +84,13 @@ describe('source volume and exact vial status export',()=>{
   expect(transform(d,'Frederick',fields).rows[0].Volume).toBe('');
   d.rows[0].values.Volume='not numeric';expect(transform(d,'Frederick',fields).issues).toHaveLength(1);
  });
- it.each(['Frederick','Endoscopy'] as const)('exports literal lowercase ln in the correct %s column',workflow=>{
+ it.each(['Frederick','Endoscopy'] as const)('exports the exact workflow-specific vial status in the correct %s column',workflow=>{
   const rows=workflow==='Frederick'?f().rows:e().rows;
   const csv=toCSV(workflow,rows);
   const sheet=XLSX.read(csv,{type:'string',raw:true}).Sheets.Sheet1;
   const table=XLSX.utils.sheet_to_json<string[]>(sheet,{header:1,defval:''});
   const index=table[0].indexOf('Vial Status');
-  for(const row of table.slice(1)){expect(row).toHaveLength(SCHEMAS[workflow].length);expect(row[index]).toBe('ln');expect([...row[index]].map(c=>c.charCodeAt(0))).toEqual([108,110]);}
+  for(const row of table.slice(1)){expect(row).toHaveLength(SCHEMAS[workflow].length);expect(row[index]).toBe(workflow==='Frederick'?'In':'ln');expect([...row[index]].map(c=>c.charCodeAt(0))).toEqual(workflow==='Frederick'?[73,110]:[108,110]);}
  });
 });
 

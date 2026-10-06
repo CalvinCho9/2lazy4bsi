@@ -6,7 +6,7 @@ import {VOCABULARY} from '../rules/anatomy';
 import {parseBytes,type IntakeResult} from '../parsers/intake';
 import {transform,type Result} from '../transformers/transform';
 import {localISO} from '../utils/normalize';
-import {toCSV} from '../utils/csv';
+import {toCSV,toExcel} from '../utils/csv';
 const warning = 'IMPORTANT: If you have a vial that has less fragments and thus will be using less cryovials, make sure to delete the respective row manually in BSI.';
 export default function App() {
  const [workflow,setWorkflow]=useState<Workflow|null>(null);
@@ -49,6 +49,11 @@ export default function App() {
   finally {if(current===token.current)setBusy(false);}
  }
  async function copy() {try{await navigator.clipboard.writeText(csv);setStatus('Complete CSV copied to clipboard.');}catch{setStatus('Clipboard access is unavailable. Use Download CSV or select and copy the complete text below.');}}
+ function downloadExcel(){
+  if(!workflow || !result || !csv)return;
+  const url=URL.createObjectURL(new Blob([toExcel(workflow,result.rows)],{type:'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'}));
+  const a=document.createElement('a');a.href=url;a.download=`${workflow.toUpperCase()}_BSI_IMPORT_${localISO()}.xlsx`;a.click();setTimeout(()=>URL.revokeObjectURL(url),1000);setStatus('Excel download requested. Dates are stored as MM/DD/YYYY text.');
+ }
  function download(){const url=URL.createObjectURL(new Blob([csv],{type:'text/csv;charset=utf-8'}));const a=document.createElement('a');a.href=url;a.download=`${workflow!.toUpperCase()}_BSI_IMPORT_${localISO()}.csv`;a.click();setTimeout(()=>URL.revokeObjectURL(url),1000);setStatus('CSV download requested.');}
  return <main>
   <header><div className="eyebrow">RESEARCH OPERATIONS / SPECIMEN UTILITIES</div><h1>BSI Data Preparation</h1><p>Secure browser-based transformation for Frederick and Endoscopy specimen data.</p></header>
@@ -69,7 +74,7 @@ export default function App() {
     <div className="pagination"><button disabled={page===0} onClick={()=>setPage(page-1)}>Previous</button><span>Preview rows {result.rows.length? page*100+1:0}–{Math.min((page+1)*100,result.rows.length)} of {result.rows.length}</span><button disabled={(page+1)*100>=result.rows.length} onClick={()=>setPage(page+1)}>Next</button></div><p className="hint">Dashes indicate empty cells in this preview only. Export includes every row and preserves empty fields.</p>
    </>}</section>
    <section><h3><b>4</b> Generate BSI CSV</h3>{workflow==='Endoscopy'&&<p className="warning">{warning}</p>}<button className="primary" disabled={!ready} onClick={()=>{setGenerated(true);setStatus('Complete BSI CSV generated.');}}>Generate BSI CSV</button>{result&&!result.rows.length&&!result.issues.length&&<p>No qualifying specimen rows were found.</p>}</section>
-   <section><h3><b>5</b> Copy / Download</h3><div className="actions"><button disabled={!csv} onClick={()=>void copy()}>Copy CSV to Clipboard</button><button className="primary" disabled={!csv} onClick={download}>Download CSV</button></div>{csv&&<label>Complete CSV text<textarea readOnly value={csv} rows={7} spellCheck={false}/></label>}</section>
+   <section><h3><b>5</b> Copy / Download</h3><div className="actions"><button disabled={!csv} onClick={()=>void copy()}>Copy CSV to Clipboard</button><button className="primary" disabled={!csv} onClick={download}>Download CSV</button><button disabled={!csv} onClick={downloadExcel}>Download Excel (text dates)</button></div><p className="hint">Use CSV for direct BSI import. For opening in Excel or copying cells from Excel, use the Excel download to preserve MM/DD/YYYY dates and leading zeroes.</p>{csv&&<label>Complete CSV text<textarea readOnly value={csv} rows={7} spellCheck={false}/></label>}</section>
   </>}
   {(error||validation)&&<p className="errors" role="alert">{error||validation}</p>}<p role="status" aria-live="polite">{status}</p>
   <footer>BSI assigns the blank managed fields. Review the complete output before importing.<br/>Header-based sanitization cannot detect identifying information entered into specimen fields. Clipboard and downloaded files remain under your control.</footer>

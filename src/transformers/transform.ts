@@ -23,6 +23,7 @@ export function transform(dataset: Dataset, workflow: Workflow, fields: UserFiel
    if (!subject || !safeSource(subject) || /[\r\n\t]/.test(subject)) {result.issues.push({line:source.line,message:'Subject ID is missing or invalid. Correct this row in the source file.'});continue;}
    try {row['Date Drawn'] = sourceDate(v['Date Drawn'] ?? '');} catch {result.issues.push({line:source.line,message:'Date Drawn is missing or invalid. Use an Excel date, YYYY-MM-DD or MM/DD/YYYY in the source file.'});continue;}
    row['Subject ID'] = subject;
+   row['Vial Status'] = 'In';
    const modifier = modifiers(v['Material Modifier'] ?? '');
    const unit = (v['Volume Unit'] ?? '').trim();
    if (![material,modifier,unit].every(safeSource)) {result.issues.push({line:source.line,message:'A source field has an unsafe spreadsheet formula prefix. Correct the source file.'});continue;}

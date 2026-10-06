@@ -43,7 +43,29 @@ test('Frederick uses Klion and previews each source subject and date without man
  await expect(page.getByRole('cell',{name:'10/04/2026',exact:true})).toBeVisible();
  await expect(page.getByLabel('Subject ID',{exact:true})).toHaveCount(0);
  await expect(page.locator('body')).not.toContainText('WRONG-SHEET');
- await expect(page.getByRole('button',{name:'Generate BSI CSV',exact:true})).toBeEnabled();
+ await expect(page.getByRole('cell',{name:'In',exact:true})).toHaveCount(2);
+ await page.getByRole('button',{name:'Generate BSI CSV',exact:true}).click();
+ const csv=await page.getByLabel('Complete CSV text').inputValue();
+ expect(csv).toContain(',10/05/2026,');expect(csv).toContain(',10/04/2026,');expect(csv).not.toContain('46300');
+ const pending=page.waitForEvent('download');await page.getByRole('button',{name:'Download CSV'}).click();
+ const download=await pending;const stream=await download.createReadStream();
+ const chunks:Buffer[]=[];for await(const chunk of stream!)chunks.push(Buffer.from(chunk));
+ const downloaded=Buffer.concat(chunks).toString('utf8');
+ expect(downloaded.replace(/\r\n/g,'\n')).toBe(csv);
+ const table=XLSX.utils.sheet_to_json<string[]>(XLSX.read(downloaded,{type:'string',raw:true}).Sheets.Sheet1,{header:1,defval:''});
+ const dateColumn=table[0].indexOf('Date Drawn'),statusColumn=table[0].indexOf('Vial Status');
+ expect(table.slice(1).map(row=>row[dateColumn])).toEqual(['10/05/2026','10/04/2026']);
+ expect(table.slice(1).map(row=>row[statusColumn])).toEqual(['In','In']);
+ const pendingExcel=page.waitForEvent('download');await page.getByRole('button',{name:'Download Excel (text dates)',exact:true}).click();
+ const excel=await pendingExcel;expect(excel.suggestedFilename()).toMatch(/\.xlsx$/);
+ const excelStream=await excel.createReadStream();const excelChunks:Buffer[]=[];
+ for await(const chunk of excelStream!)excelChunks.push(Buffer.from(chunk));
+ const sheet=XLSX.read(Buffer.concat(excelChunks),{type:'buffer',cellNF:true}).Sheets['BSI Import'];
+ expect(sheet.E2).toMatchObject({t:'s',v:'10/05/2026',z:'@'});
+ expect(sheet.E3).toMatchObject({t:'s',v:'10/04/2026',z:'@'});
+ expect(sheet.D2).toMatchObject({t:'s',v:'001',z:'@'});
+ expect(sheet.Q2.v).toBe('In');
+
 });
 test('PNG OCR stays local, strips unknown values and requires review before output',async({page,context})=>{
  test.setTimeout(120000);
