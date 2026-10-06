@@ -63,7 +63,8 @@ export async function parsePNG(file:File,signal:AbortSignal,progress:(message:st
    rows.push(classifyImageRow(rows.length+1,region,location,await readCell(columns.container,top,bottom),await readCell(columns.destination,top,bottom)));
   }
   if(!rows.length)throw new Error(FAILURE);
-  return {rows,removedPHI:columns.removedPHI};
+  const retained=rows.filter(row=>row.destination!=='NIH surg path' && !['NIH provided','Other'].includes(row.container));
+  return {rows:retained,removedPHI:columns.removedPHI,excludedRows:rows.length-retained.length};
  } catch(error) {
   // Never surface worker errors or OCR text: both may contain image contents.
   if(signal.aborted)throw new Error('Image reading cancelled.');

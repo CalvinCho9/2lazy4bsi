@@ -30,6 +30,8 @@ test('Endoscopy XLSX and controlled anatomy resolution',async({page})=>{
  await expect(page.getByRole('button',{name:'Generate BSI CSV',exact:true})).toBeEnabled();
  await expect(page.getByText(/IMPORTANT: If you have a vial/)).toBeVisible();
  await page.getByRole('button',{name:'Generate BSI CSV',exact:true}).click();expect(await page.getByLabel('Complete CSV text').inputValue()).toContain('ILEUM; TERMINAL');
+ await expect(page.getByRole('button',{name:'Download Excel (text dates)',exact:true})).toHaveClass('primary');
+ await expect(page.getByRole('button',{name:'Download CSV',exact:true})).not.toHaveClass('primary');
  await page.getByRole('button',{name:/Frederick/}).click();await expect(page.getByLabel('Subject ID',{exact:true})).toHaveCount(0);
 });
 test('Frederick uses Klion and previews each source subject and date without manual inputs',async({page})=>{
@@ -89,21 +91,27 @@ test('PNG OCR stays local, strips unknown values and requires review before outp
  await page.getByRole('button',{name:/Endoscopy/}).click();
  await page.getByLabel(/Source spreadsheet/).setInputFiles({name:'synthetic.png',mimeType:'image/png',buffer:Buffer.from(encoded,'base64')});
  await expect(page.getByRole('region',{name:'PNG extraction review'})).toBeVisible({timeout:90000});
- await expect(page.locator('[aria-label="PNG extraction review"] tbody tr')).toHaveCount(4);
+ await expect(page.locator('[aria-label="PNG extraction review"] tbody tr')).toHaveCount(3);
+ await expect(page.getByLabel('Container for image row 2',{exact:true})).toHaveCount(0);
  await expect(page.locator('body')).not.toContainText('SECRET_IDENTIFIER');
  await expect(page.locator('body')).not.toContainText('UNKNOWN_PRIVATE');
  await expect(page.getByRole('button',{name:'Generate BSI CSV',exact:true})).toBeDisabled();
  await expect(page.getByRole('button',{name:/I checked every image row/})).toBeDisabled();
- await page.getByLabel('Location for image row 4',{exact:true}).selectOption('2nd and 3rd part');
+ const automatic=page.getByRole('group',{name:'Material modifiers for image row 3',exact:true});
+ await expect(automatic.getByRole('checkbox',{name:'2ND DUODENUM',exact:true})).toBeChecked();
+ await expect(automatic.getByRole('checkbox',{name:'3RD DUODENUM',exact:true})).toBeChecked();
+ const correction=page.getByRole('group',{name:'Material modifiers for image row 4',exact:true});
+ await correction.getByRole('checkbox',{name:'2ND DUODENUM',exact:true}).check();
+ await correction.getByRole('checkbox',{name:'3RD DUODENUM',exact:true}).check();
  await page.getByRole('button',{name:/I checked every image row/}).click();
  await page.getByLabel('Subject ID',{exact:true}).fill('TEST-PNG');await page.getByLabel('Date Drawn',{exact:true}).fill('2026-10-05');
  await page.getByRole('button',{name:'Generate BSI CSV',exact:true}).click();
- const csv=await page.getByLabel('Complete CSV text').inputValue();expect(csv.trim().split('\n')).toHaveLength(3);expect(csv).toContain('DUODENUM; 2ND DUODENUM; 3RD DUODENUM');expect(csv).not.toContain('SECRET');
+ const csv=await page.getByLabel('Complete CSV text').inputValue();expect(csv.trim().split('\n')).toHaveLength(4);expect(csv).toContain('DUODENUM; 2ND DUODENUM; 3RD DUODENUM');expect(csv).not.toContain('SECRET');
  expect(requests.length).toBeGreaterThan(0);
  for(const r of requests){expect(r.method).toBe('GET');expect(r.body).toBe(false);const url=new URL(r.url);expect(url.origin).toBe('http://127.0.0.1:4173');expect(url.search).toBe('');expect(url.pathname).toMatch(/^\/(assets|ocr)\//);}
  expect(await page.evaluate(async()=>({local:localStorage.length,session:sessionStorage.length,db:(await indexedDB.databases()).length}))).toEqual({local:0,session:0,db:0});
  // Editing invalidates confirmation and previously generated CSV.
- await page.getByLabel('Destination for image row 1',{exact:true}).selectOption('Other');
+ await automatic.getByRole('checkbox',{name:'3RD DUODENUM',exact:true}).uncheck();
  await expect(page.getByLabel('Complete CSV text')).toHaveCount(0);
  await expect(page.getByRole('button',{name:'Generate BSI CSV',exact:true})).toBeDisabled();
  await page.getByRole('button',{name:'Reset / Clear file'}).click();await expect(page.getByRole('region',{name:'PNG extraction review'})).toHaveCount(0);

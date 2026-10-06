@@ -110,3 +110,24 @@ describe('Excel serial Date Drawn export',()=>{
   expect(transform(d,'Frederick',{subject:'',drawn:''}).issues).toHaveLength(1);
  });
 });
+
+describe('Endoscopy automatic anatomy and Study Team filtering',()=>{
+ it.each(['2nd & 3rd part','2nd/3rd part','2nd duodenum; 3rd duodenum','second and third portion','2nd part, 3rd part'])('recognizes combined duodenum location %s',location=>{
+  expect(mapAnatomy('duodenum',location)).toBe('DUODENUM; 2ND DUODENUM; 3RD DUODENUM');
+ });
+ it('maps other combined labels without accepting unknown fragments',()=>{
+  expect(mapAnatomy('esophagus','proximal and mid')).toBe('ESOPHAGUS; PROXIMAL; MIDDLE');
+  expect(mapAnatomy('stomach','body & antrum')).toBe('GASTRIC; BODY STOMACH; ANTRUM');
+  expect(mapAnatomy('duodenum','2nd and unknown')).toBeNull();
+ });
+ it('keeps Study Team destinations except NIH surgical pathology',()=>{
+  const data=sanitizeMatrix([['Anatomic Location','Container','Going where?'],
+   ['DUODENUM'],['2nd & 3rd part','Study Team','Building 4'],
+   ['2nd & 3rd part','Study Team','NIH surgical path'],
+   ['Unknown','NIH provided','NIH surg path'],
+   ['2nd & 3rd part','Study Team',''],['2nd & 3rd part','Other','BG 10 Lab']], 'Endoscopy');
+  const result=transform(data,'Endoscopy',fields);
+  expect(result.issues).toEqual([]);expect(result.rows).toHaveLength(2);expect(result.excluded).toBe(4);
+  expect(result.rows.every(row=>row['Material Modifiers']==='DUODENUM; 2ND DUODENUM; 3RD DUODENUM')).toBe(true);
+ });
+});

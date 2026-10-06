@@ -1,3 +1,4 @@
+import {retainEndoscopy} from '../rules/endoscopy';
 import {BSI_FIELDS, CONSTANTS, FREDERICK_VOLUME_MODE, LABEL, SCHEMAS, type Workflow} from '../rules/config';
 import {mapAnatomy, REGIONS, VOCABULARY} from '../rules/anatomy';
 import type {Dataset} from '../parsers/intake';
@@ -41,7 +42,7 @@ export function transform(dataset: Dataset, workflow: Workflow, fields: UserFiel
    const key = match(location);
    const pureSection = REGIONS.includes(key) && !whitespace(v.Container) && !whitespace(v['Going where?']);
    if (pureSection) {region=key;result.excluded++;continue;}
-   if (!match(v.Container).includes('study team') || !match(v['Going where?']).includes('bg 10 lab')) {result.excluded++;continue;}
+   if (!retainEndoscopy(v.Container ?? '',v['Going where?'] ?? '')) {result.excluded++;continue;}
    const override = resolutions[source.line];
    const anatomy = override && override.split(';').every(x=>VOCABULARY.includes(x.trim())) ? modifiers(override) : mapAnatomy(region,location);
    if (!anatomy) {result.issues.push({line:source.line,message:'Anatomical Location is not recognized. Select the approved entities for this row.'});continue;}

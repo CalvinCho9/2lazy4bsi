@@ -1,3 +1,4 @@
+import {isStudyTeam,isSurgicalPath,retainEndoscopy} from '../rules/endoscopy';
 import {header,match} from '../utils/normalize';
 import {isPHI} from '../security/sanitize';
 import {ALIASES} from '../rules/config';
@@ -6,8 +7,8 @@ import type {Dataset} from './intake';
 export const IMAGE_LOCATIONS = ['Proximal/mid','Distal','Body','Antrum','2nd and 3rd part','Terminal Ileum','Ascending','Descending',...VOCABULARY];
 export const IMAGE_CONTAINERS = ['Study Team','NIH provided','Other'];
 export const IMAGE_DESTINATIONS = ['BG 10 Lab','NIH surg path','Other'];
-export type ImageRow = {id:number; region:string; location:string; container:string; destination:string};
-export type ImageReview = {rows:ImageRow[]; removedPHI:number};
+export type ImageRow = {id:number; region:string; location:string; container:string; destination:string; modifiers?:string[]};
+export type ImageReview = {rows:ImageRow[]; removedPHI:number; excludedRows?:number};
 export type Pixels = {width:number;height:number;data:Uint8ClampedArray};
 const dark = (image:Pixels,x:number,y:number) => {
  if(x<0||y<0||x>=image.width||y>=image.height)return false;
@@ -42,15 +43,20 @@ export function approvedColumns(headers:string[]) {
 // Only controlled labels leave OCR intake. Unknown raw OCR text is never previewed or retained.
 export function classifyImageRow(id:number,region:string,location:string,container:string,destination:string):ImageRow {
  const l=match(location).replace(/\s*\/\s*/g,'/');
- return {id,region:REGIONS.includes(region)?region:'',location:IMAGE_LOCATIONS.find(x=>match(x)===l)??'',
- container:match(container).includes('study team')?'Study Team':match(container).includes('nih provided')?'NIH provided':'',
- destination:match(destination)==='bg 10 lab'?'BG 10 Lab':match(destination).includes('nih surg path')?'NIH surg path':match(destination)==='building 4'?'Other':''};
+ return {id,region:REGIONS.includes(region)?region:'',location:IMAGE_LOCATIONS.find(x=>match(x)===l)??mapAnatomy(region,l)??'',
+ container:isSurgicalPath(container)?'NIH provided':isStudyTeam(container)?'Study Team':match(container).includes('nih provided')?'NIH provided':match(container)==='other'?'Other':'',
+ destination:match(destination)==='bg 10 lab'?'BG 10 Lab':isSurgicalPath(destination)?'NIH surg path':match(destination)==='building 4'?'Other':''};
+}
+export function imageModifiers(row:ImageRow):string | null {
+ if(row.modifiers!==undefined)return row.modifiers.length && row.modifiers.every(x=>VOCABULARY.includes(x)) ? [...new Set(row.modifiers)].join('; ') : null;
+ return mapAnatomy(row.region,row.location);
 }
 export function imageReviewProblem(rows:ImageRow[]):string {
  if(!rows.length)return 'Add at least one table row.';
  for(const row of rows){
-  if(!IMAGE_CONTAINERS.includes(row.container)||!IMAGE_DESTINATIONS.includes(row.destination))return `Image row ${row.id}: resolve Container and Going where? before confirming.`;
-  if(row.container==='Study Team'&&row.destination==='BG 10 Lab'&&(!REGIONS.includes(row.region)||!IMAGE_LOCATIONS.includes(row.location)||!mapAnatomy(row.region,row.location)))return `Image row ${row.id}: resolve its anatomical region and location before confirming.`;
+  if(row.destination==='NIH surg path' || ['NIH provided','Other'].includes(row.container))continue;
+  if(!IMAGE_CONTAINERS.includes(row.container))return `Image row ${row.id}: resolve Container before confirming.`;
+  if(retainEndoscopy(row.container,row.destination)&&!imageModifiers(row))return `Image row ${row.id}: resolve its anatomical region and location before confirming.`;
  }
  return '';
 }
@@ -58,7 +64,7 @@ export function imageDataset(review:ImageReview):Dataset {
  const problem=imageReviewProblem(review.rows);if(problem)throw new Error(problem);
  // Carry explicit, normalized anatomy per image row; edits cannot change a neighbor's region.
  const rows=review.rows.map(row=>({line:row.id,values:{
-  'Anatomical Location':mapAnatomy(row.region,row.location)??row.location,
+  'Anatomical Location':imageModifiers(row)??row.location,
   Container:row.container,'Going where?':row.destination,
  }}));
  return {rows,originalRows:review.rows.length,removedPHI:review.removedPHI,columns:['Anatomical Location','Container','Going where?'],skippedRows:0};

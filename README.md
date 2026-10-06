@@ -40,7 +40,7 @@ Subject ID and Date Drawn come from each specimen row in Klion (or its CSV expor
 
 ## Endoscopy rules
 
-Requires Anatomical Location (or Anatomic Location), Container and Going where?. Reads top to bottom; pure ESOPHAGUS, STOMACH, DUODENUM and COLONOSCOPY section rows set the active region. Merged horizontal headers work through their top-left cell. Retains only rows whose normalized Container contains Study Team AND destination contains BG 10 Lab. Footnotes `*`, `§`, `†`, `‡` are ignored for matching. NIH/nonmatching rows and pure section headers are excluded. Fragment/pass counts never multiply or delete specimen rows.
+Requires Anatomical Location (or Anatomic Location), Container and Going where?. Reads top to bottom; pure ESOPHAGUS, STOMACH, DUODENUM and COLONOSCOPY section rows set the active region. Merged horizontal headers work through their top-left cell. Retains rows whose normalized Container contains Study Team, except NIH surg path / NIH surgical pathology rows. Study Team rows at other destinations (including Building 4) are retained. Footnotes `*`, `§`, `†`, `‡` are ignored for matching. NIH/nonmatching rows and pure section headers are excluded. Fragment/pass counts never multiply or delete specimen rows.
 
 Mappings in `src/rules/anatomy.ts`:
 
@@ -55,7 +55,7 @@ Mappings in `src/rules/anatomy.ts`:
 | COLONOSCOPY / Ascending | ASC COLON |
 | COLONOSCOPY / Descending | DSC COLON |
 
-Already controlled entities are accepted, deduplicated and combined with the region (STOMACH becomes GASTRIC; COLONOSCOPY is not emitted). Unknown anatomy blocks export. The review identifies the source row without echoing arbitrary source text, which could contain identifiers. Consult that row in your local source, select approved entities in the intended order, then apply the resolution. Resolutions can be undone.
+Combined locations using semicolons, commas, slashes, `and`, `&` or `+` are automatically recognized when every component is approved (for example `2nd & 3rd part`). Already controlled entities are accepted, deduplicated and combined with the region (STOMACH becomes GASTRIC; COLONOSCOPY is not emitted). Unknown anatomy blocks export. The review identifies the source row without echoing arbitrary source text, which could contain identifiers. Consult that row in your local source, select approved entities in the intended order, then apply the resolution. Resolutions can be undone.
 
 Material Type is Biopsy; Volume is 0.500; Unit is ml (cc); Vial Type is 2ml Nunc Tube. Date Received uses the browser's local calendar date with exactly `00:00`, formatted MM/DD/YYYY HH:mm. Date Drawn is exported as MM/DD/YYYY. All other constants and blank fields match the centralized schema. The required cryovial/fragment warning is displayed before generation.
 
@@ -66,11 +66,11 @@ Upload a clear PNG of the complete bordered table, including its header row. The
 The browser decodes the image, detects borders and OCRs the header cells. It then reads only anatomy, Container and Going where? cells using Tesseract.js. This image-specific intake necessarily sees pixels and header text before identifying PHI columns. It does not OCR PHI-column values, footnotes, passes, fragments or protocol. No image or arbitrary raw OCR text is shown in the UI or retained in application state. Only controlled anatomy/routing labels enter the review; unknown or low-confidence OCR becomes **Needs review**. Column detection and OCR are not a guarantee of de-identification. Keep identifying text outside the specimen fields.
 
 1. Compare every detected row against the original PNG open locally. The app does not display the original image because it may contain identifiers.
-2. Correct region, location, Container and destination with the dropdowns. Add missed specimen rows or remove extra detected rows. Appended rows carry their own explicit region.
-3. Resolve every unknown Container/destination, and region/location for every Study Team + BG 10 Lab row. **Other** explicitly excludes a row; recognized Building 4 maps to Other. Review excluded rows as carefully as included rows so an OCR routing error does not omit a specimen.
+2. Recognized anatomy is selected automatically. Correct region, location, Container and destination with the dropdowns, or select multiple material modifiers with the checkboxes. Add missed specimen rows or remove extra detected rows. Appended rows carry their own explicit region.
+3. Resolve unknown Containers and anatomy on retained Study Team rows. Recognized NIH surgical pathology and NIH-provided rows are removed automatically. A Container of **Other** excludes a row; a destination of **Other** does not. Study Team rows routed to Building 4 are retained. Compare the retained rows with the source and add any missed rows.
 4. Click **I checked every image row — confirm extraction**, enter Subject ID/Date Drawn, inspect the final BSI table and generate CSV. Editing any extraction row invalidates confirmation and generated output.
 
-Each retained image row yields exactly one specimen row. The provided reference has 19 specimen rows and 9 qualifying BG 10 Lab rows. Its Duodenum Study Team row routes to Building 4 and is excluded under the existing rule. Initial OCR on the reference required anatomy correction (including Terminal Ileum); it is deliberately not treated as authoritative. The supplied image is not committed to the repository; automated fixtures are generated synthetic images.
+Each retained image row yields exactly one specimen row. Study Team rows, including Duodenum rows routed to Building 4, are retained unless designated NIH surgical pathology. Unknown OCR anatomy still requires correction. The supplied image is not committed to the repository; automated fixtures are generated synthetic images.
 
 PNG limits: 20 MB; at least 300 × 100 pixels; neither dimension above 6,000; at most 16 million pixels; up to 149 detected horizontal bands. Rotated/skewed photographs, borderless tables, compressed or blurry images, arbitrary merged cells, multiple different column layouts and handwriting are unsupported. Unsupported layouts fail with a safe message; OCR can still miss rows, so the explicit human count/content review is mandatory. Text and colors are not used to infer fragment counts or cryovial counts. Existing spreadsheet upload remains available.
 
@@ -134,3 +134,5 @@ If a publish job fails with “The job was not acquired by Runner of type hosted
 - Matching uses normalized case/spacing, but preserved Frederick material values keep their original semantic spelling. Matching groups capitalization variants together.
 - Bundled Excel support adds approximately 200 KB gzip to the application. SheetJS 0.20.3 is vendored from its official distribution following https://docs.sheetjs.com/docs/getting-started/installation/nodejs/; its license is included in the tarball. Do not replace it with the older npm-registry release.
 - Modern Chromium is covered by browser automation. Other browsers should support standard File/Blob APIs; clipboard requires a secure context and browser permission. No BSI instance is available for a live import test.
+
+PNG review automatically removes recognized NIH/non-Study-Team rows and preselects recognized material modifiers. Each retained row offers independent modifier checkboxes; multiple selections export with `; ` separators. Unknown OCR anatomy still requires correction and extraction confirmation. Excel download is the primary blue button in both workflows.
