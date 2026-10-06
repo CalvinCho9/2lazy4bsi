@@ -101,8 +101,14 @@ test('PNG OCR stays local, strips unknown values and requires review before outp
  await expect(automatic.getByRole('checkbox',{name:'2ND DUODENUM',exact:true})).toBeChecked();
  await expect(automatic.getByRole('checkbox',{name:'3RD DUODENUM',exact:true})).toBeChecked();
  const correction=page.getByRole('group',{name:'Material modifiers for image row 4',exact:true});
+ const unresolved=page.getByRole('row').filter({has:correction});
+ await expect(unresolved).toHaveClass('needs-review');
+ await expect(unresolved.locator('.review-badge')).toHaveText('Needs review');
+ await expect(correction).toHaveAttribute('aria-invalid','true');
  await correction.getByRole('checkbox',{name:'2ND DUODENUM',exact:true}).check();
  await correction.getByRole('checkbox',{name:'3RD DUODENUM',exact:true}).check();
+ await expect(unresolved).not.toHaveClass('needs-review');
+ await expect(unresolved.getByText('Retain',{exact:true})).toBeVisible();
  await page.getByRole('button',{name:/I checked every image row/}).click();
  await page.getByLabel('Subject ID',{exact:true}).fill('TEST-PNG');await page.getByLabel('Date Drawn',{exact:true}).fill('2026-10-05');
  await page.getByRole('button',{name:'Generate BSI CSV',exact:true}).click();

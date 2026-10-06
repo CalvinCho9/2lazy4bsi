@@ -3,3 +3,9 @@
 [aria-label="PNG extraction review"] select{min-width:150px} [aria-label="PNG extraction review"] .actions{margin-top:16px;flex-wrap:wrap}
 
 [aria-label="PNG extraction review"] fieldset{min-width:260px;max-height:190px;overflow:auto;border:1px solid #cbd5dc} [aria-label="PNG extraction review"] fieldset label{display:flex;align-items:center;gap:8px;margin:6px 0} [aria-label="PNG extraction review"] input[type=checkbox]{display:inline-block;margin:0;padding:0}
+
+[aria-label="PNG extraction review"] tr.needs-review > td{background:#fff0ef;border-color:#e4aaa5}
+[aria-label="PNG extraction review"] tr.needs-review > td:first-child{border-left:4px solid #b43b32}
+[aria-label="PNG extraction review"] [aria-invalid=true]{background:#ffe2df;border:2px solid #b43b32}
+.review-badge{display:inline-block;background:#f9d2ce;color:#80271f;border:1px solid #c97a72;border-radius:4px;padding:5px 8px;white-space:nowrap}
+.review-summary{color:#80271f;background:#fff0ef;border-left:4px solid #b43b32;padding:12px;font-weight:600}
